@@ -80,11 +80,6 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
 <main>
   <h1>Recibo rápido</h1>
 
-  <div class="tabs" role="tablist">
-    <button role="tab" id="t-novo" aria-selected="true">Novo recibo</button>
-    <button role="tab" id="t-emp" aria-selected="false">Minha empresa</button>
-  </div>
-
   <section class="panel" id="p-novo">
     <label for="cCnpj">CNPJ do cliente</label>
     <input id="cCnpj" inputmode="numeric" placeholder="00.000.000/0000-00" autocomplete="off">
@@ -100,22 +95,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
     <input id="dt" type="date">
     <p class="hint">Nenhum campo é obrigatório. Sem quantidade, vale 1.</p>
     <button class="btn" id="gerar">Gerar recibo</button>
-  </section>
-
-  <section class="panel hidden" id="p-emp">
-    <label for="eNome">Razão social</label>
-    <input id="eNome" autocomplete="off">
-    <label for="eCnpj">CNPJ</label>
-    <input id="eCnpj" inputmode="numeric" placeholder="00.000.000/0000-00" autocomplete="off">
-    <label>Logo</label>
-    <div class="logo-box">
-      <div id="logoSlot"></div>
-      <input id="logoFile" type="file" accept="image/*">
-    </div>
-    <button class="btn alt hidden" id="logoRm">Remover logo</button>
-    <button class="btn" id="salvar">Salvar dados da empresa</button>
-    <div class="toast" id="toast" role="status"></div>
-    <p class="hint">Os dados ficam salvos só neste navegador. Você preenche uma vez.</p>
+    <div class="toast" id="cfgMsg" role="status"></div>
   </section>
 
   <div id="preview" class="hidden">
@@ -132,10 +112,9 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
-const KEY='reciboEmpresa';
 let emp={nome:'',cnpj:'',logo:''};
 
-try{const s=localStorage.getItem(KEY);if(s)emp=Object.assign(emp,JSON.parse(s));}catch(e){}
+fetch('config.json',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(c=>{emp=Object.assign(emp,c);}).catch(()=>{$('cfgMsg').textContent='Dados da empresa não carregados. Confira o arquivo config.json.';});
 
 /* ---------- utilidades ---------- */
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -192,49 +171,7 @@ function extenso(valor){
   return out.join(' e ');
 }
 
-/* ---------- abas ---------- */
-function aba(nome){
-  const novo=nome==='novo';
-  $('p-novo').classList.toggle('hidden',!novo);
-  $('p-emp').classList.toggle('hidden',novo);
-  $('t-novo').setAttribute('aria-selected',novo);
-  $('t-emp').setAttribute('aria-selected',!novo);
-}
-$('t-novo').onclick=()=>aba('novo');
-$('t-emp').onclick=()=>aba('emp');
-
-/* ---------- empresa ---------- */
-function desenharLogo(){
-  $('logoSlot').innerHTML=emp.logo?'<img alt="Logo da empresa" src="'+emp.logo+'">':'<div class="none">sem logo</div>';
-  $('logoRm').classList.toggle('hidden',!emp.logo);
-}
-$('eNome').value=emp.nome;$('eCnpj').value=emp.cnpj;desenharLogo();
-$('eCnpj').oninput=e=>e.target.value=maskCnpj(e.target.value);
 $('cCnpj').oninput=e=>e.target.value=maskCnpj(e.target.value);
-
-$('logoFile').onchange=e=>{
-  const f=e.target.files[0];if(!f)return;
-  const rd=new FileReader();
-  rd.onload=()=>{
-    const img=new Image();
-    img.onload=()=>{
-      const max=400,k=Math.min(1,max/Math.max(img.width,img.height));
-      const cv=document.createElement('canvas');
-      cv.width=Math.round(img.width*k);cv.height=Math.round(img.height*k);
-      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-      emp.logo=cv.toDataURL('image/png');desenharLogo();
-      $('toast').textContent='Logo carregada. Toque em salvar.';
-    };
-    img.src=rd.result;
-  };
-  rd.readAsDataURL(f);
-};
-$('logoRm').onclick=()=>{emp.logo='';$('logoFile').value='';desenharLogo();};
-$('salvar').onclick=()=>{
-  emp.nome=$('eNome').value.trim();emp.cnpj=$('eCnpj').value.trim();
-  try{localStorage.setItem(KEY,JSON.stringify(emp));$('toast').textContent='Dados salvos.';}
-  catch(e){$('toast').textContent='Não consegui salvar neste navegador. A logo pode estar grande demais.';}
-};
 
 /* ---------- recibo ---------- */
 const hoje=new Date();
@@ -254,7 +191,7 @@ $('gerar').onclick=()=>{
 
   let cab='';
   if(emp.logo||emp.nome||emp.cnpj){
-    cab='<header>'+(emp.logo?'<img alt="" src="'+emp.logo+'">':'')+
+    cab='<header>'+(emp.logo?'<img alt="" src="'+esc(emp.logo)+'">':'')+
       '<div class="emp">'+esc(emp.nome)+(emp.cnpj?'<small>CNPJ '+esc(emp.cnpj)+'</small>':'')+'</div></header>';
   }
 
@@ -297,7 +234,6 @@ $('baixar').onclick=async()=>{
   }catch(e){msg.textContent='Não consegui gerar o PDF. Tente o botão Imprimir.';}
 };
 
-if(!emp.nome&&!emp.logo)aba('emp');
 </script>
 <script>
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}
